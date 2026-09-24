@@ -159,6 +159,22 @@ body.zen #zenBtn { color: var(--accent); }
 #bgOpacity:disabled::-webkit-slider-thumb { cursor: not-allowed; }
 .opacity-val { min-width: 42px; text-align: right; font-size: 13px; color: var(--text-sub); }
 .hidden-input { display: none; }
+
+/* 同步（S3）表单 */
+.sync-status { font-size: 12px; color: var(--text-sub); margin-bottom: 12px; min-height: 16px; }
+.field { display: block; font-size: 13px; color: var(--text-sub); margin-bottom: 12px; }
+.field input {
+  display: block; width: 100%; margin-top: 6px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--card-bg); color: var(--text-main);
+  padding: 9px 12px; font-size: 14px; outline: none;
+  transition: border 0.2s;
+}
+.field input:focus { border-color: var(--accent); }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.sync-btns { display: flex; gap: 8px; margin-top: 4px; }
+.sync-btns .primary-btn, .sync-btns .ghost-btn { flex: 1; }
+.sync-hint { font-size: 12px; color: var(--text-sub); margin-top: 10px; line-height: 1.5; }
 #searchInput::placeholder { color: var(--text-sub); }
 .search-btn {
   border: none; background: transparent; cursor: pointer;
@@ -295,7 +311,7 @@ body.dark .picker-item img { background: #3a4150; }
 
 /* ---------- 设置面板 ---------- */
 .settings-panel {
-  width: min(520px, 94vw); max-height: 86vh;
+  width: min(840px, 94vw); max-height: 88vh;
   display: flex; flex-direction: column;
   background: var(--input-bg);
   border-radius: 18px;
@@ -316,14 +332,14 @@ body.dark .picker-item img { background: #3a4150; }
 }
 .icon-btn:hover { color: #e5484d; transform: scale(1.08); }
 
-.settings-body { padding: 6px 22px 20px; overflow-y: auto; }
-.settings-section { padding: 16px 0; border-bottom: 1px solid var(--border); }
+.settings-body { padding: 4px 24px 20px; overflow-y: auto; }
+.settings-section { padding: 18px 0; border-bottom: 1px solid var(--border); }
 .settings-section:last-child { border-bottom: none; }
-.settings-section h4 { font-size: 13px; color: var(--text-sub); font-weight: 600; margin-bottom: 12px; }
-.section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.settings-section h4 { font-size: 13px; color: var(--text-sub); font-weight: 600; margin-bottom: 14px; }
+.section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .section-head h4 { margin-bottom: 0; }
 
-.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
 
 /* 开关 */
 .switch { position: relative; display: inline-block; width: 42px; height: 24px; }
@@ -342,44 +358,50 @@ body.dark .picker-item img { background: #3a4150; }
 .switch input:checked + .slider::before { transform: translateX(18px); }
 
 /* 分类管理列表 */
-.manager-list { display: flex; flex-direction: column; gap: 10px; }
+.manager-list { display: flex; flex-direction: column; gap: 12px; }
 .manager-cat {
   border: 1px solid var(--border);
   border-radius: 12px; overflow: hidden;
-}
-.manager-cat-head {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px; cursor: pointer;
   background: var(--card-bg);
 }
-.manager-cat-head .cat-name { font-size: 14px; font-weight: 600; flex: 1; }
-.manager-cat-head .cat-count { font-size: 12px; color: var(--text-sub); }
-.manager-cat-head .arrow { font-size: 11px; color: var(--text-sub); transition: transform 0.2s; }
+.manager-cat-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; cursor: pointer;
+  transition: background 0.15s;
+}
+.manager-cat-head:hover { background: var(--input-bg); }
+.manager-cat-head .arrow { width: 12px; font-size: 11px; color: var(--text-sub); transition: transform 0.2s; }
 .manager-cat.open .arrow { transform: rotate(90deg); }
+.manager-cat-head .cat-name { font-size: 14px; font-weight: 600; }
+.manager-cat-head .cat-count { font-size: 12px; color: var(--text-sub); }
+.manager-cat-actions { margin-left: auto; display: flex; gap: 2px; }
 
-.manager-items { display: none; flex-direction: column; padding: 6px 12px 12px; gap: 4px; }
+.manager-items { display: none; flex-direction: column; padding: 2px 8px 8px; }
 .manager-cat.open .manager-items { display: flex; }
 
 .manager-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 7px 8px; border-radius: 8px;
+  display: grid;
+  grid-template-columns: 22px minmax(120px, 220px) 1fr auto;
+  align-items: center; gap: 12px;
+  padding: 7px 10px; border-radius: 8px;
   transition: background 0.15s;
 }
-.manager-item:hover { background: var(--card-bg); }
+.manager-item:hover { background: var(--input-bg); }
 .manager-item img {
-  width: 22px; height: 22px; border-radius: 6px; object-fit: contain; flex-shrink: 0;
+  width: 22px; height: 22px; border-radius: 6px; object-fit: contain;
 }
+.manager-item .letter { width: 22px; height: 22px; border-radius: 6px; font-size: 12px; }
 .manager-item .mi-name {
-  flex: 1; font-size: 13px;
+  font-size: 13px; color: var(--text-main);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .manager-item .mi-url {
-  flex: 1.4; font-size: 12px; color: var(--text-sub);
+  font-size: 12px; color: var(--text-sub); text-decoration: none;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.manager-item .mi-url:hover { color: var(--accent); }
+.manager-item .mi-actions { display: flex; gap: 2px; }
 .manager-item .mini-btn { flex-shrink: 0; }
-
-.manager-cat-actions { display: flex; gap: 6px; padding: 0 12px 10px; }
 
 .empty-tip { text-align: center; color: var(--text-sub); font-size: 13px; padding: 18px 0; }
 

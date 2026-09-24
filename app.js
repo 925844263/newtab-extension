@@ -8,6 +8,13 @@ const ENGINE_CACHE_KEY = "newtab_engine_cache_v1"; // 自动检测结果缓存
 const BG_KEY = "newtab_bg_v1";                     // 自定义背景 { dataUrl, opacity }
 const ZEN_KEY = "newtab_zen_v1";                   // 纯背景模式（隐藏图标）
 const PARTICLE_KEY = "newtab_particle_v1";         // 粒子动效开关
+const S3_ENDPOINT_KEY = "newtab_s3_endpoint_v1"; // 对象存储服务地址
+const S3_BUCKET_KEY = "newtab_s3_bucket_v1";     // 存储桶
+const S3_AK_KEY = "newtab_s3_access_key_v1";     // Access Key
+const S3_SK_KEY = "newtab_s3_secret_key_v1";     // Secret Key
+const S3_EMAIL_KEY = "newtab_s3_email_v1";       // 邮箱（用于区分用户）
+const SYNC_ENABLED_KEY = "newtab_sync_enabled_v1"; // 是否开启自动同步
+const S3_FILE = "newtab-config.json";            // 云端配置文件名（默认）
 const $ = (sel) => document.querySelector(sel);
 
 /* 搜索引擎注册表：pattern 用于从浏览记录识别，home 用于取 favicon，tpl 用于手动指定时拼搜索 URL */
@@ -23,6 +30,12 @@ const ENGINE_CACHE_TTL = 12 * 60 * 60 * 1000; // 检测结果缓存 12 小时
 
 let data = [];               // [{ name, items: [{name, url, icon?}] }]
 let editing = null;          // { catIndex, itemIndex } 或 { catIndex, itemIndex: -1 }
+let s3Endpoint = "";         // 对象存储服务地址
+let s3Bucket = "";           // 存储桶
+let s3Ak = "";               // Access Key
+let s3Sk = "";               // Secret Key
+let s3Email = "";            // 邮箱（用于区分用户）
+let syncEnabled = true;      // 是否开启自动同步
 
 /* ---------------- 存储 ---------------- */
 async function loadData() {
@@ -37,6 +50,7 @@ async function loadData() {
 
 async function saveData() {
   await chrome.storage.local.set({ [STORAGE_KEY]: data });
+  notifyConfigChange();
 }
 
 /* ---------------- 问候 & 时钟 ---------------- */
@@ -80,6 +94,7 @@ function toggleTheme(dark) {
   chrome.storage.local.set({ [THEME_KEY]: dark ? "dark" : "light" });
   $("#darkToggle").checked = dark;
   updateThemeIcon();
+  notifyConfigChange();
 }
 
 /* ---------------- 自定义背景 ---------------- */
@@ -114,6 +129,7 @@ function applyBackground() {
 
 async function saveBackground() {
   await chrome.storage.local.set({ [BG_KEY]: bgState });
+  notifyConfigChange();
 }
 
 /* ---------------- 纯背景模式 ---------------- */
@@ -134,6 +150,7 @@ function toggleZen() {
   const zen = document.body.classList.toggle("zen");
   chrome.storage.local.set({ [ZEN_KEY]: zen });
   updateZenIcon();
+  notifyConfigChange();
 }
 
 /* ---------------- 粒子动效 ---------------- */
@@ -154,6 +171,149 @@ function enableParticle() {
 
 function disableParticle() {
   if (particleHandle) particleHandle.stop();
+}
+
+/* ---------------- 对象存储 / S3 同步 ---------------- */
+let syncDebounce = null;
+
+function setS3Status(msg) { $("#s3Status").textContent = msg; }
+
+function s3Configured() {
+  return !!(s3Endpoint.trim() && s3Bucket.trim() && s3Ak.trim() && s3Sk.trim());
+}
+
+function getS3Config() {
+  return { endpoint: s3Endpoint, bucket: s3Bucket, accessKey: s3Ak, secretKey: s3Sk, region: "us-east-1" };
+}
+
+/* 不同人用邮箱区分：留空用默认 newtab-config.json，否则 newtab-config-{邮箱}.json */
+function getS3Key() {
+  const id = (s3Email || "").trim().replace(/[^A-Za-z0-9._@-]/g, "");
+  if (!id) return S3_FILE;
+  return "newtab-config-" + id + ".json";
+}
+
+async function s3Fetch(method, bodyStr) {
+  const cfg = getS3Config();
+  const key = getS3Key();
+  let resp;
+  try {
+    if (method === "GET") resp = await window.s3.getObject(cfg, key);
+    else if (method === "HEAD") resp = await window.s3.headObject(cfg, key);
+    else resp = await window.s3.putObject(cfg, key, bodyStr);
+  } catch (e) {
+    return { status: 0, json: { error: "无法连接对象存储服务" } };
+  }
+  let json = null;
+  try { json = await resp.json(); } catch (e) {}
+  return { status: resp.status, json };
+}
+
+/* 配置变更后（已配置 S3 时）自动上传，2 秒防抖 */
+function notifyConfigChange() {
+  if (!s3Configured()) return;
+  clearTimeout(syncDebounce);
+  syncDebounce = setTimeout(() => { s3UploadConfig().catch(() => {}); }, 2000);
+}
+
+function updateS3Status() {
+  setS3Status(s3Configured() ? "" : "未配置");
+}
+
+async function buildConfig() {
+  const res = await chrome.storage.local.get([STORAGE_KEY, THEME_KEY, ENGINE_PREF_KEY, ZEN_KEY, PARTICLE_KEY, BG_KEY]);
+  return {
+    version: 1,
+    data: res[STORAGE_KEY] || window.DEFAULT_DATA,
+    theme: res[THEME_KEY] || "light",
+    enginePref: res[ENGINE_PREF_KEY] || "auto",
+    zen: res[ZEN_KEY] === true,
+    particle: res[PARTICLE_KEY] !== false,
+    background: res[BG_KEY] || null,
+    updatedAt: Date.now()
+  };
+}
+
+async function applyConfig(cfg) {
+  if (!cfg || typeof cfg !== "object") return;
+  const set = {};
+  if (cfg.data != null) set[STORAGE_KEY] = cfg.data;
+  if (cfg.theme != null) set[THEME_KEY] = cfg.theme;
+  if (cfg.enginePref != null) set[ENGINE_PREF_KEY] = cfg.enginePref;
+  if (cfg.zen != null) set[ZEN_KEY] = !!cfg.zen;
+  if (cfg.particle != null) set[PARTICLE_KEY] = !!cfg.particle;
+  if (cfg.background != null) set[BG_KEY] = cfg.background;
+  await chrome.storage.local.set(set);
+  location.reload();
+}
+
+async function s3Test() {
+  if (!s3Configured()) { setS3Status("请先填写 Endpoint、Bucket、Access Key 和 Secret Key"); return; }
+  setS3Status("正在测试连接…");
+  const { status } = await s3Fetch("HEAD");
+  if (status >= 200 && status < 300) { setS3Status("连接成功，云端已有配置"); return; }
+  if (status === 404) { setS3Status("连接成功（云端暂无配置，可直接上传）"); return; }
+  if (status === 401 || status === 403) { setS3Status("连接失败：Access Key / Secret Key 错误或权限不足"); return; }
+  setS3Status("连接失败：HTTP " + status);
+}
+
+async function s3UploadConfig() {
+  if (!s3Configured()) return;
+  const cfg = await buildConfig();
+  const { status } = await s3Fetch("PUT", JSON.stringify(cfg));
+  if (status >= 200 && status < 300) {
+    setS3Status("已上传配置 " + new Date().toLocaleTimeString());
+  } else if (status === 401 || status === 403) {
+    setS3Status("上传失败：Access Key / Secret Key 错误或权限不足");
+  } else {
+    setS3Status("上传失败：HTTP " + status);
+  }
+}
+
+async function s3DownloadConfig() {
+  if (!s3Configured()) { setS3Status("请先填写 Endpoint、Bucket、Access Key 和 Secret Key"); return; }
+  setS3Status("正在下载配置…");
+  const { status, json } = await s3Fetch("GET");
+  if (status >= 200 && status < 300 && json) {
+    setS3Status("已下载配置，正在应用…");
+    await applyConfig(json);
+    return;
+  }
+  if (status === 404) { setS3Status("云端暂无配置文件"); return; }
+  if (status === 401 || status === 403) { setS3Status("下载失败：Access Key / Secret Key 错误或权限不足"); return; }
+  setS3Status("下载失败：HTTP " + status);
+}
+
+async function saveS3Creds() {
+  await chrome.storage.local.set({
+    [S3_ENDPOINT_KEY]: s3Endpoint,
+    [S3_BUCKET_KEY]: s3Bucket,
+    [S3_AK_KEY]: s3Ak,
+    [S3_SK_KEY]: s3Sk,
+    [S3_EMAIL_KEY]: s3Email
+  });
+}
+
+async function loadS3Config() {
+  const res = await chrome.storage.local.get([S3_ENDPOINT_KEY, S3_BUCKET_KEY, S3_AK_KEY, S3_SK_KEY, S3_EMAIL_KEY]);
+  s3Endpoint = res[S3_ENDPOINT_KEY] || "";
+  s3Bucket = res[S3_BUCKET_KEY] || "";
+  s3Ak = res[S3_AK_KEY] || "";
+  s3Sk = res[S3_SK_KEY] || "";
+  s3Email = res[S3_EMAIL_KEY] || "";
+  $("#s3Endpoint").value = s3Endpoint;
+  $("#s3Bucket").value = s3Bucket;
+  $("#s3Ak").value = s3Ak;
+  $("#s3Sk").value = s3Sk;
+  $("#s3Email").value = s3Email;
+  updateS3Status();
+}
+
+/* 多设备同步开关：控制是否读取 Chrome 账号同步来的其它设备书签 */
+async function loadSyncToggle() {
+  const res = await chrome.storage.local.get([SYNC_ENABLED_KEY]);
+  syncEnabled = res[SYNC_ENABLED_KEY] !== false; // 默认开启
+  $("#syncToggle").checked = syncEnabled;
 }
 
 /* ---------------- 工具 ---------------- */
@@ -193,9 +353,22 @@ function letterHtml(name) {
 function iconImgHtml(item, cls) {
   const url = faviconUrl(item);
   if (url) {
-    return `<img class="${cls}" src="${url}" alt="" onerror="this.outerHTML='${letterHtml(item.name).replace(/"/g, "&quot;")}'">`;
+    return `<img class="${cls}" src="${url}" alt="">`;
   }
   return letterHtml(item.name);
+}
+
+/* MV3 的 CSP 禁止内联事件（onerror=...），必须用 JS 绑定：图标加载失败时回退为字母图标 */
+function attachIconFallback(container, item) {
+  const img = container.querySelector("img");
+  if (!img) return;
+  img.addEventListener("error", () => {
+    const div = document.createElement("div");
+    div.className = "letter";
+    div.style.background = colorFromName(item.name);
+    div.textContent = (item.name[0] || "?").toUpperCase();
+    img.replaceWith(div);
+  });
 }
 
 /* ---------------- 主页渲染（纯展示） ---------------- */
@@ -223,6 +396,7 @@ function render() {
       a.innerHTML = `
         <div class="card-icon">${iconImgHtml(item, "fav")}</div>
         <span class="card-title">${escapeHtml(item.name)}</span>`;
+      attachIconFallback(a.querySelector(".card-icon"), item);
       grid.appendChild(a);
     });
 
@@ -257,16 +431,18 @@ function renderManager() {
         <span class="arrow">▶</span>
         <span class="cat-name">${escapeHtml(cat.name)}</span>
         <span class="cat-count">${cat.items.length} 项</span>
+        <div class="manager-cat-actions">
+          <button class="mini-btn add-item">＋ 添加书签</button>
+          <button class="mini-btn rename-cat">重命名</button>
+          <button class="mini-btn danger del-cat">删除分类</button>
+        </div>
       </div>
-      <div class="manager-items"></div>
-      <div class="manager-cat-actions">
-        <button class="mini-btn add-item">+ 添加书签</button>
-        <button class="mini-btn rename-cat">重命名</button>
-        <button class="mini-btn danger del-cat">删除分类</button>
-      </div>`;
+      <div class="manager-items"></div>`;
 
-    // 展开/收起
+    // 展开/收起（点击头部空白处；操作按钮不触发折叠）
     box.querySelector(".manager-cat-head").addEventListener("click", () => box.classList.toggle("open"));
+    box.querySelectorAll(".manager-cat-actions .mini-btn").forEach((b) =>
+      b.addEventListener("click", (e) => e.stopPropagation()));
 
     box.querySelector(".add-item").addEventListener("click", () => openModal({ catIndex: ci, itemIndex: -1 }));
 
@@ -284,27 +460,29 @@ function renderManager() {
     });
 
     const itemsBox = box.querySelector(".manager-items");
+    if (!cat.items.length) {
+      itemsBox.innerHTML = `<div class="empty-tip">该分类暂无书签</div>`;
+    }
     cat.items.forEach((item, ii) => {
       const row = document.createElement("div");
       row.className = "manager-item";
       row.innerHTML = `
         ${iconImgHtml(item, "fav")}
-        <span class="mi-name">${escapeHtml(item.name)}</span>
-        <span class="mi-url">${escapeHtml(item.url)}</span>
-        <button class="mini-btn edit-item">编辑</button>
-        <button class="mini-btn danger del-item">删除</button>`;
+        <span class="mi-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+        <a class="mi-url" href="${escapeHtml(normalizeUrl(item.url))}" target="_blank" rel="noopener" title="${escapeHtml(item.url)}">${escapeHtml(item.url)}</a>
+        <span class="mi-actions">
+          <button class="mini-btn edit-item">编辑</button>
+          <button class="mini-btn danger del-item">删除</button>
+        </span>`;
 
       row.querySelector(".edit-item").addEventListener("click", () => openModal({ catIndex: ci, itemIndex: ii }));
       row.querySelector(".del-item").addEventListener("click", () => {
         data[ci].items.splice(ii, 1);
         saveData(); render(); renderManager();
       });
+      attachIconFallback(row, item);
       itemsBox.appendChild(row);
     });
-
-    if (!cat.items.length) {
-      itemsBox.innerHTML = `<div class="empty-tip">该分类暂无书签</div>`;
-    }
 
     list.appendChild(box);
   });
@@ -345,7 +523,8 @@ async function flattenBrowserBookmarks() {
   const out = [];
   (function walk(nodes, folderPath) {
     for (const n of nodes) {
-      if (isForeignFolder(n)) continue;           // 跳过其它设备同步来的书签
+      // 未开启「多设备同步」时，排除其它设备（手机/平板）同步来的书签
+      if (!syncEnabled && isForeignFolder(n)) continue;
       if (n.url) {
         out.push({ name: n.title || n.url, url: n.url, folder: folderPath });
       }
@@ -358,16 +537,43 @@ async function flattenBrowserBookmarks() {
   return out;
 }
 
+/* 云端（其他设备同步的）书签：来自 S3 配置文件 */
+async function flattenCloudBookmarks() {
+  if (!s3Configured()) return [];
+  try {
+    const { status, json } = await s3Fetch("GET");
+    if (status >= 200 && status < 300 && json && Array.isArray(json.data)) {
+      const out = [];
+      json.data.forEach((cat) => {
+        (cat.items || []).forEach((it) => {
+          if (it && it.url) out.push({ name: it.name || it.url, url: it.url, folder: "云端/" + (cat.name || "未分类") });
+        });
+      });
+      return out;
+    }
+  } catch (e) {}
+  return [];
+}
+
+let pickerCache = null; // 打开选择器时缓存合并结果，避免搜索时重复请求云端
+
 async function renderPickerList(keyword = "") {
   const list = $("#pickerList");
-  const items = await flattenBrowserBookmarks();
+  if (!pickerCache) {
+    const browserItems = await flattenBrowserBookmarks();
+    // 云端书签去掉与浏览器重复的，放在前面
+    const cloudItems = (await flattenCloudBookmarks())
+      .filter((c) => !browserItems.some((b) => normalizeUrl(b.url) === normalizeUrl(c.url)));
+    pickerCache = { items: [...cloudItems, ...browserItems] };
+  }
+  const items = pickerCache.items;
   const kw = keyword.trim().toLowerCase();
   const filtered = kw
     ? items.filter((b) => b.name.toLowerCase().includes(kw) || b.url.toLowerCase().includes(kw))
     : items;
 
   if (!filtered.length) {
-    list.innerHTML = `<div class="picker-empty">${items.length ? "没有匹配的书签" : "浏览器中没有保存书签"}</div>`;
+    list.innerHTML = `<div class="picker-empty">${items.length ? "没有匹配的书签" : "没有可用的书签"}</div>`;
     return;
   }
 
@@ -378,10 +584,12 @@ async function renderPickerList(keyword = "") {
     btn.type = "button";
     const fav = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(b.url)}&size=32`;
     btn.innerHTML = `
-      <img src="${fav}" alt="" onerror="this.style.visibility='hidden'">
+      <img src="${fav}" alt="">
       <span class="pi-name">${escapeHtml(b.name)}</span>
       <span class="pi-url">${escapeHtml(b.url)}</span>
       <span class="pi-folder" title="所在文件夹：${escapeHtml(b.folder)}">${escapeHtml(b.folder || "书签栏")}</span>`;
+    const pimg = btn.querySelector("img");
+    if (pimg) pimg.addEventListener("error", () => { pimg.style.visibility = "hidden"; });
     btn.addEventListener("click", () => {
       $("#bmName").value = b.name;
       $("#bmUrl").value = b.url;
@@ -400,6 +608,7 @@ async function renderPickerList(keyword = "") {
 
 function openPicker() {
   $("#pickerSearch").value = "";
+  pickerCache = null; // 重新打开时刷新云端书签
   renderPickerList();
   $("#pickerMask").classList.remove("hidden");
   $("#pickerSearch").focus();
@@ -466,11 +675,15 @@ async function renderSearchIcon() {
 
   if (eng) {
     const fav = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(eng.home)}&size=64`;
-    const letter = escapeHtml(eng.name[0]).toUpperCase();
-    const bg = colorFromName(eng.name).replace(/"/g, "&quot;");
     el.style.background = "transparent";
-    el.innerHTML = `<img src="${fav}" alt="${eng.name}" title="${eng.name}"
-      onerror="this.parentElement.style.background='${bg}';this.outerHTML='${letter}'">`;
+    el.innerHTML = `<img src="${fav}" alt="${escapeHtml(eng.name)}" title="${escapeHtml(eng.name)}">`;
+    const img = el.querySelector("img");
+    if (img) {
+      img.addEventListener("error", () => {
+        el.style.background = colorFromName(eng.name);
+        el.textContent = eng.name[0].toUpperCase();
+      });
+    }
   } else {
     // 检测不到时的默认样式
     el.style.background = "linear-gradient(135deg, #4285f4, #34a853)";
@@ -510,6 +723,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadBackground();
   await loadZen();
   await loadParticle();
+  await loadS3Config();
+  await loadSyncToggle();
   renderGreeting();
   tickClock();
   setInterval(tickClock, 1000);
@@ -544,6 +759,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#particleToggle").addEventListener("change", (e) => {
     chrome.storage.local.set({ [PARTICLE_KEY]: e.target.checked });
     if (e.target.checked) enableParticle(); else disableParticle();
+    notifyConfigChange();
   });
 
   // 恢复搜索引擎偏好
@@ -551,6 +767,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("#engineSelect").addEventListener("change", async (e) => {
     await chrome.storage.local.set({ [ENGINE_PREF_KEY]: e.target.value });
     renderSearchIcon();
+    notifyConfigChange();
   });
 
   $("#searchForm").addEventListener("submit", doSearch);
@@ -584,6 +801,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     data = [];
     await saveData(); render(); renderManager();
   });
+
+  // 对象存储 / S3 同步
+  $("#s3Endpoint").addEventListener("change", (e) => { s3Endpoint = e.target.value.trim(); saveS3Creds(); });
+  $("#s3Bucket").addEventListener("change", (e) => { s3Bucket = e.target.value.trim(); saveS3Creds(); });
+  $("#s3Ak").addEventListener("change", (e) => { s3Ak = e.target.value.trim(); saveS3Creds(); });
+  $("#s3Sk").addEventListener("change", (e) => { s3Sk = e.target.value; saveS3Creds(); });
+  $("#s3Email").addEventListener("change", (e) => { s3Email = e.target.value.trim(); saveS3Creds(); });
+  $("#syncToggle").addEventListener("change", (e) => {
+    syncEnabled = e.target.checked;
+    chrome.storage.local.set({ [SYNC_ENABLED_KEY]: syncEnabled });
+    bmFlatCache = null;   // 重新拉取浏览器书签（含/不含其它设备）
+    pickerCache = null;
+  });
+  $("#s3TestBtn").addEventListener("click", s3Test);
+  $("#s3UploadBtn").addEventListener("click", s3UploadConfig);
+  $("#s3DownloadBtn").addEventListener("click", s3DownloadConfig);
 
   // 书签编辑弹窗
   $("#modalCancel").addEventListener("click", closeModal);

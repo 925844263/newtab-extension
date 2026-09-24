@@ -82,6 +82,18 @@
       </div>
 
       <div class="settings-body">
+        <!-- 多设备同步开关 -->
+        <section class="settings-section">
+          <div class="section-head">
+            <h4>多设备同步</h4>
+            <label class="switch">
+              <input type="checkbox" id="syncToggle" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="sync-hint">开启后，添加书签时「从浏览器书签选择」会包含 Chrome 账号同步到本机的其它设备（手机/平板等）书签。</div>
+        </section>
+
         <!-- 主题 -->
         <section class="settings-section">
           <h4>外观</h4>
@@ -145,6 +157,36 @@
           </div>
         </section>
 
+        <!-- 对象存储 / S3 同步 -->
+        <section class="settings-section">
+          <h4>同步（对象存储 / S3）</h4>
+          <div class="sync-status" id="s3Status">未配置</div>
+          <div class="form-grid">
+            <label class="field">Endpoint
+              <input id="s3Endpoint" type="text">
+            </label>
+            <label class="field">Bucket
+              <input id="s3Bucket" type="text">
+            </label>
+          </div>
+          <div class="form-grid">
+            <label class="field">Access Key
+              <input id="s3Ak" type="text" autocomplete="off">
+            </label>
+            <label class="field">Secret Key
+              <input id="s3Sk" type="password" autocomplete="new-password">
+            </label>
+          </div>
+          <label class="field">邮箱
+            <input id="s3Email" type="email" autocomplete="off">
+          </label>
+          <div class="sync-btns">
+            <button id="s3TestBtn" class="ghost-btn small">测试连接</button>
+            <button id="s3UploadBtn" class="primary-btn small">上传配置</button>
+            <button id="s3DownloadBtn" class="ghost-btn small">下载配置</button>
+          </div>
+        </section>
+
         <!-- 数据 -->
         <section class="settings-section">
           <h4>数据</h4>
@@ -183,6 +225,7 @@
 
   <script src="data.js"></script>
   <script src="particles.js"></script>
+  <script src="s3.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

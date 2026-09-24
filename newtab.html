@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新标签页</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 自定义背景图层 -->
+  <div id="bgLayer" class="bg-layer"></div>
+  <!-- 彩色网状线条粒子动效 -->
+  <canvas id="particleCanvas" class="particle-canvas"></canvas>
+
+  <!-- 右上角：主题切换 + 设置 -->
+  <div class="corner-actions">
+    <button id="zenBtn" class="settings-btn" title="隐藏图标，纯背景模式 (H)">
+      <svg id="iconEye" class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+        <circle cx="12" cy="12" r="3"></circle>
+      </svg>
+      <svg id="iconEyeOff" class="theme-icon hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"></path>
+        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"></path>
+        <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"></path>
+        <line x1="1" y1="1" x2="23" y2="23"></line>
+      </svg>
+    </button>
+    <button id="themeBtn" class="settings-btn" title="切换主题">
+      <svg id="iconSun" class="theme-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="4"></circle>
+        <line x1="12" y1="1.5" x2="12" y2="4"></line><line x1="12" y1="20" x2="12" y2="22.5"></line>
+        <line x1="1.5" y1="12" x2="4" y2="12"></line><line x1="20" y1="12" x2="22.5" y2="12"></line>
+        <line x1="4.6" y1="4.6" x2="6.4" y2="6.4"></line><line x1="17.6" y1="17.6" x2="19.4" y2="19.4"></line>
+        <line x1="4.6" y1="19.4" x2="6.4" y2="17.6"></line><line x1="17.6" y1="6.4" x2="19.4" y2="4.6"></line>
+      </svg>
+      <svg id="iconMoon" class="theme-icon hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
+      </svg>
+    </button>
+    <button id="settingsBtn" class="settings-btn" title="设置 (S)">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+      </svg>
+    </button>
+  </div>
+
+  <div class="page">
+    <!-- 顶部问候 -->
+    <header class="greeting-wrap">
+      <div class="greeting">
+        <span id="greetText" class="greet-text">Hello</span>
+      </div>
+      <div id="clock" class="clock"></div>
+    </header>
+
+    <!-- 搜索栏 -->
+    <div class="search-wrap">
+      <form id="searchForm" class="search-box">
+        <div class="search-icon">G</div>
+        <input id="searchInput" type="text" placeholder="搜索站点或输入网址" autocomplete="off" autofocus>
+        <button type="submit" class="search-btn" aria-label="搜索">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <circle cx="11" cy="11" r="7"></circle>
+            <line x1="21" y1="21" x2="16.5" y2="16.5"></line>
+          </svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- 书签展示区（只读，纯展示） -->
+    <main id="categories" class="categories"></main>
+  </div>
+
+  <!-- 设置面板 -->
+  <div id="settingsMask" class="modal-mask hidden">
+    <div class="settings-panel">
+      <div class="settings-head">
+        <h3>设置</h3>
+        <button id="settingsClose" class="icon-btn" title="关闭 (Esc)">✕</button>
+      </div>
+
+      <div class="settings-body">
+        <!-- 主题 -->
+        <section class="settings-section">
+          <h4>外观</h4>
+          <div class="setting-row">
+            <span>深色模式</span>
+            <label class="switch">
+              <input type="checkbox" id="darkToggle">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </section>
+
+        <!-- 分类管理 -->
+        <section class="settings-section">
+          <div class="section-head">
+            <h4>分类与书签</h4>
+            <button id="addCategoryBtn" class="primary-btn small">+ 新建分类</button>
+          </div>
+          <div id="managerList" class="manager-list"></div>
+        </section>
+
+        <!-- 背景图片 -->
+        <section class="settings-section">
+          <h4>背景图片</h4>
+          <div class="setting-row">
+            <span>本地图片</span>
+            <div class="bg-btns">
+              <button id="pickBgBtn" class="ghost-btn small">选择图片</button>
+              <button id="clearBgBtn" class="ghost-btn danger small">清除</button>
+            </div>
+          </div>
+          <div class="setting-row opacity-row">
+            <span>图片透明度</span>
+            <input id="bgOpacity" type="range" min="0" max="100" value="100">
+            <span id="bgOpacityVal" class="opacity-val">100%</span>
+          </div>
+          <input id="bgFileInput" type="file" accept="image/*" class="hidden-input">
+          <div class="setting-row particle-row">
+            <span>彩色网状粒子动效</span>
+            <label class="switch">
+              <input type="checkbox" id="particleToggle">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </section>
+
+        <!-- 搜索引擎 -->
+        <section class="settings-section">
+          <h4>搜索引擎</h4>
+          <div class="setting-row">
+            <span>搜索图标与搜索使用的引擎</span>
+            <select id="engineSelect" class="select-input">
+              <option value="auto">自动检测（跟随浏览器默认）</option>
+              <option value="google">Google</option>
+              <option value="bing">Bing</option>
+              <option value="baidu">百度</option>
+              <option value="duckduckgo">DuckDuckGo</option>
+              <option value="sogou">搜狗</option>
+              <option value="so">360 搜索</option>
+            </select>
+          </div>
+        </section>
+
+        <!-- 数据 -->
+        <section class="settings-section">
+          <h4>数据</h4>
+          <div class="setting-row">
+            <button id="importBtn" class="ghost-btn">导入默认导航</button>
+            <button id="resetBtn" class="ghost-btn danger">清空数据</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- 书签编辑弹窗 -->
+  <div id="modalMask" class="modal-mask hidden">
+    <div class="modal">
+      <h3 id="modalTitle">添加书签</h3>
+      <button type="button" id="pickBookmarkBtn" class="ghost-btn picker-btn">📂 从浏览器书签选择</button>
+      <label>名称<input id="bmName" type="text" placeholder="站点名称"></label>
+      <label>网址<input id="bmUrl" type="text" placeholder="https://example.com"></label>
+      <label>图标 URL（可选，留空自动抓取 favicon）<input id="bmIcon" type="text" placeholder="https://.../logo.png"></label>
+      <div class="modal-actions">
+        <button id="modalCancel" class="ghost-btn">取消</button>
+        <button id="modalSave" class="primary-btn">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 浏览器书签选择器 -->
+  <div id="pickerMask" class="modal-mask hidden">
+    <div class="modal picker-modal">
+      <h3>选择浏览器书签</h3>
+      <input id="pickerSearch" type="text" placeholder="🔍 搜索书签名称或网址…" autocomplete="off">
+      <div id="pickerList" class="picker-list"></div>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="particles.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
